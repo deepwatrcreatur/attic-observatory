@@ -7,7 +7,7 @@ import sqlite3
 import sys
 import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, quote, urlencode, urlparse
+from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urlparse, urlsplit, urlunsplit
 
 
 DB_PATH = os.environ.get("ATTIC_DB_PATH", "/var/lib/atticd/server.db")
@@ -144,8 +144,11 @@ def get_theme(theme_name: str | None) -> tuple[str, dict]:
 
 
 def with_theme(path: str, theme_key: str) -> str:
-    separator = "&" if "?" in path else "?"
-    return f"{path}{separator}theme={quote(theme_key)}"
+    split = urlsplit(path)
+    safe_path = "/" + split.path.lstrip("/")
+    query = [(key, value) for key, value in parse_qsl(split.query, keep_blank_values=True) if key != "theme"]
+    query.append(("theme", theme_key))
+    return urlunsplit(("", "", safe_path, urlencode(query), split.fragment))
 
 
 def connect_db() -> sqlite3.Connection:
