@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urlparse, urlspl
 DB_PATH = os.environ.get("ATTIC_DB_PATH", "/var/lib/atticd/server.db")
 HOST = os.environ.get("ATTIC_OBSERVATORY_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ATTIC_OBSERVATORY_PORT", "8088"))
+DB_IMMUTABLE = os.environ.get("ATTIC_DB_IMMUTABLE", "").strip().lower() in {"1", "true", "yes", "on"}
 DEFAULT_THEME = os.environ.get("ATTIC_OBSERVATORY_THEME", "x-dark").strip().lower()
 
 THEMES = {
@@ -152,7 +153,10 @@ def with_theme(path: str, theme_key: str) -> str:
 
 
 def connect_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro&immutable=1", uri=True)
+    uri = f"file:{DB_PATH}?mode=ro"
+    if DB_IMMUTABLE:
+        uri += "&immutable=1"
+    conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 
