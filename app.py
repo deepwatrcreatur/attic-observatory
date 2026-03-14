@@ -5,8 +5,9 @@ import json
 import os
 import sqlite3
 import sys
+import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 
 DB_PATH = os.environ.get("ATTIC_DB_PATH", "/var/lib/atticd/server.db")
@@ -130,6 +131,9 @@ THEMES = {
         "danger": "#dc322f",
     },
 }
+
+if DEFAULT_THEME not in THEMES:
+    warnings.warn(f"Unknown theme '{DEFAULT_THEME}', falling back to 'sugarplum'", stacklevel=1)
 
 
 def get_theme(theme_name: str | None) -> tuple[str, dict]:
@@ -404,7 +408,14 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
     return markup.encode("utf-8")
 
 
-def render_nav(theme_key: str) -> str:
+def build_current_path(route: str, query: dict[str, list[str]]) -> str:
+    filtered_query = [(key, value) for key, values in query.items() if key != "theme" for value in values]
+    if not filtered_query:
+        return route
+    return f"{route}?{urlencode(filtered_query)}"
+
+
+def render_nav(theme_key: str, current_path: str) -> str:
     links = [
         ("Overview", "/"),
         ("Recent Uploads", "/uploads"),
@@ -412,7 +423,7 @@ def render_nav(theme_key: str) -> str:
     ]
     nav_links = "".join(f'<a href="{html.escape(with_theme(path, theme_key))}">{html.escape(label)}</a>' for label, path in links)
     theme_links = "".join(
-        f'<a href="{html.escape(with_theme("/", key))}">{html.escape(data["name"])}</a>'
+        f'<a href="{html.escape(with_theme(current_path, key))}">{html.escape(data["name"])}</a>'
         for key, data in THEMES.items()
     )
     return f"""
@@ -435,7 +446,7 @@ def parse_json_array(value: str | None) -> list[str]:
         return [value]
 
 
-def render_overview(theme_key: str) -> bytes:
+def render_overview(theme_key: str, current_path: str) -> bytes:
     stats = query_one(
         """
         select
@@ -528,7 +539,7 @@ def render_overview(theme_key: str) -> bytes:
       </div>
       <div class="badge">DB: <code>{html.escape(DB_PATH)}</code></div>
     </div>
-    {render_nav(theme_key)}
+      {render_nav(theme_key, current_path)}
     <div class="cards">
       <div class="card"><div class="label">Cache</div><div class="value">{html.escape(cache_name)}</div></div>
       <div class="card"><div class="label">Objects</div><div class="value">{format_int(stats['objects'])}</div></div>
@@ -580,7 +591,7 @@ def render_overview(theme_key: str) -> bytes:
     return page_template("attic-observatory", body, theme_key)
 
 
-def render_uploads(query: dict[str, list[str]], theme_key: str) -> bytes:
+def render_uploads(query: dict[str, list[str]], theme_key: str, current_path: str) -> bytes:
     limit = min(max(int(query.get("limit", ["100"])[0]), 1), 500)
     rows = query_all(
         """
@@ -625,7 +636,7 @@ def render_uploads(query: dict[str, list[str]], theme_key: str) -> bytes:
       </div>
       <div class="badge">Showing {format_int(limit)} rows</div>
     </div>
-    {render_nav(theme_key)}
+      {render_nav(theme_key, current_path)}
     <div class="panel">
       <table>
         <thead>
@@ -638,7 +649,7 @@ def render_uploads(query: dict[str, list[str]], theme_key: str) -> bytes:
     return page_template("Recent Uploads", body, theme_key)
 
 
-def render_largest(theme_key: str) -> bytes:
+def render_largest(theme_key: str, current_path: str) -> bytes:
     rows = query_all(
         """
         select
@@ -674,7 +685,7 @@ def render_largest(theme_key: str) -> bytes:
         <p>Top 100 store paths by NAR size.</p>
       </div>
     </div>
-    {render_nav(theme_key)}
+      {render_nav(theme_key, current_path)}
     <div class="panel">
       <table>
         <thead>
@@ -687,7 +698,7 @@ def render_largest(theme_key: str) -> bytes:
     return page_template("Largest Objects", body, theme_key)
 
 
-def render_object_detail(store_hash: str, theme_key: str) -> bytes:
+def render_object_detail(store_hash: str, theme_key: str, current_path: str) -> bytes:
     row = query_one(
         """
         select
@@ -709,7 +720,7 @@ def render_object_detail(store_hash: str, theme_key: str) -> bytes:
             "Object Not Found",
             f"""
             <div class="hero"><div><h1>Object Not Found</h1><p>No object matched <code>{html.escape(store_hash)}</code>.</p></div></div>
-            {render_nav(theme_key)}
+      {render_nav(theme_key, current_path)}
             """,
             theme_key,
         )
@@ -791,20 +802,21 @@ class AppHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         route = parsed.path
         query = parse_qs(parsed.query)
+        current_path = build_current_path(route, query)
         theme_key, _theme = get_theme(query.get("theme", [None])[0])
         try:
             if route == "/":
-                self.respond(200, render_overview(theme_key))
+                self.respond(200, render_overview(theme_key, current_path))
             elif route == "/uploads":
-                self.respond(200, render_uploads(query, theme_key))
+                self.respond(200, render_uploads(query, theme_key, current_path))
             elif route == "/largest":
-                self.respond(200, render_largest(theme_key))
+                self.respond(200, render_largest(theme_key, current_path))
             elif route.startswith("/object/"):
-                self.respond(200, render_object_detail(route.split("/", 2)[2], theme_key))
+                self.respond(200, render_object_detail(route.split("/", 2)[2], theme_key, current_path))
             else:
-                self.respond(404, page_template("Not Found", f"<div class='hero'><div><h1>Not Found</h1><p>{html.escape(route)}</p></div></div>{render_nav(theme_key)}", theme_key))
+                self.respond(404, page_template("Not Found", f"<div class='hero'><div><h1>Not Found</h1><p>{html.escape(route)}</p></div></div>{render_nav(theme_key, current_path)}", theme_key))
         except sqlite3.Error as exc:
-            self.respond(500, page_template("Database Error", f"<div class='hero'><div><h1>Database Error</h1><p><code>{html.escape(str(exc))}</code></p></div></div>{render_nav(theme_key)}", theme_key))
+            self.respond(500, page_template("Database Error", f"<div class='hero'><div><h1>Database Error</h1><p><code>{html.escape(str(exc))}</code></p></div></div>{render_nav(theme_key, current_path)}", theme_key))
 
     def respond(self, status: int, body: bytes) -> None:
         self.send_response(status)
