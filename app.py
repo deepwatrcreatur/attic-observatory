@@ -759,7 +759,7 @@ def render_object_detail(store_hash: str, theme_key: str, current_path: str) -> 
       </div>
       <div class="badge"><a href="{html.escape(with_theme('/uploads', theme_key))}">Back to uploads</a></div>
     </div>
-    {render_nav(theme_key)}
+    {render_nav(theme_key, current_path)}
     <div class="panel">
       <div class="detail-grid">
         <div class="kv"><div class="k">Store Path Hash</div><div><code>{html.escape(row['store_path_hash'])}</code></div></div>
