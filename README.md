@@ -9,6 +9,7 @@ Lightweight web UI for inspecting an Attic binary cache.
 - Upload activity over time
 - Largest objects table
 - Object detail page with references and signatures
+- Built-in themes with a query-string theme switcher
 
 ## Requirements
 
@@ -19,6 +20,7 @@ Lightweight web UI for inspecting an Attic binary cache.
 
 ```bash
 export ATTIC_DB_PATH=/var/lib/atticd/server.db
+export ATTIC_OBSERVATORY_THEME=sugarplum
 python3 app.py
 ```
 
@@ -45,9 +47,27 @@ For a persistent deployment, wrap it in a systemd service or reverse proxy it be
 
 - App listen port: `8088`
 - Suggested nginx proxy port: `8082`
+- Default theme: `sugarplum`
 
 With the matching NixOS service and nginx config, the UI will be visible at:
 
 ```bash
 http://attic-cache:8082/
+```
+
+## Themes
+
+Available themes:
+
+- `sugarplum`
+- `x-dark`
+- `catppuccin-latte`
+- `gruvbox-light`
+- `nord`
+- `solarized-light`
+
+You can switch themes with a query parameter:
+
+```bash
+http://attic-cache:8082/?theme=x-dark
 ```
