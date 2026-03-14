@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urlparse, urlspl
 DB_PATH = os.environ.get("ATTIC_DB_PATH", "/var/lib/atticd/server.db")
 HOST = os.environ.get("ATTIC_OBSERVATORY_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ATTIC_OBSERVATORY_PORT", "8088"))
-DEFAULT_THEME = os.environ.get("ATTIC_OBSERVATORY_THEME", "sugarplum").strip().lower()
+DEFAULT_THEME = os.environ.get("ATTIC_OBSERVATORY_THEME", "x-dark").strip().lower()
 
 THEMES = {
     "sugarplum": {
@@ -133,13 +133,13 @@ THEMES = {
 }
 
 if DEFAULT_THEME not in THEMES:
-    warnings.warn(f"Unknown theme '{DEFAULT_THEME}', falling back to 'sugarplum'", stacklevel=1)
+    warnings.warn(f"Unknown theme '{DEFAULT_THEME}', falling back to 'x-dark'", stacklevel=1)
 
 
 def get_theme(theme_name: str | None) -> tuple[str, dict]:
-    key = (theme_name or DEFAULT_THEME or "sugarplum").strip().lower()
+    key = (theme_name or DEFAULT_THEME or "x-dark").strip().lower()
     if key not in THEMES:
-        key = "sugarplum"
+        key = "x-dark"
     return key, THEMES[key]
 
 
@@ -152,7 +152,7 @@ def with_theme(path: str, theme_key: str) -> str:
 
 
 def connect_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro&immutable=1", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -252,11 +252,40 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
       font-size: 0.95rem;
       color: var(--muted);
     }}
+    .nav-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }}
+    .nav-panel {{
+      padding: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }}
+    .nav-kicker {{
+      margin: 0 0 6px;
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }}
+    .nav-panel h2 {{
+      margin: 0 0 6px;
+      font-size: 1.05rem;
+    }}
+    .nav-note {{
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 0.94rem;
+      max-width: 48ch;
+    }}
     .nav {{
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      margin-bottom: 24px;
     }}
     .nav a {{
       padding: 10px 14px;
@@ -264,6 +293,17 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
       border: 1px solid var(--line);
       background: var(--panel);
       box-shadow: var(--shadow);
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }}
+    .nav a:hover {{
+      text-decoration: none;
+      transform: translateY(-1px);
+      border-color: var(--accent);
+    }}
+    .nav a.is-active {{
+      background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+      border-color: var(--accent);
+      color: var(--ink);
     }}
     .cards {{
       display: grid;
@@ -419,22 +459,38 @@ def build_current_path(route: str, query: dict[str, list[str]]) -> str:
 
 
 def render_nav(theme_key: str, current_path: str) -> str:
+    current_route = urlsplit(current_path).path or "/"
     links = [
         ("Overview", "/"),
         ("Recent Uploads", "/uploads"),
         ("Largest Objects", "/largest"),
     ]
-    nav_links = "".join(f'<a href="{html.escape(with_theme(path, theme_key))}">{html.escape(label)}</a>' for label, path in links)
+    nav_links = "".join(
+        f'<a class="{"is-active" if current_route == path else ""}" href="{html.escape(with_theme(path, theme_key))}">{html.escape(label)}</a>'
+        for label, path in links
+    )
     theme_links = "".join(
-        f'<a href="{html.escape(with_theme(current_path, key))}">{html.escape(data["name"])}</a>'
-        for key, data in THEMES.items()
+        f'<a class="{"is-active" if key == theme_key else ""}" href="{html.escape(with_theme(current_path, key))}">{html.escape(data["name"])}</a>'
+        for key, data in sorted(THEMES.items(), key=lambda item: item[1]["name"])
     )
     return f"""
-    <div class="nav">
-      {nav_links}
-    </div>
-    <div class="nav">
-      {theme_links}
+    <div class="nav-grid">
+      <section class="nav-panel">
+        <p class="nav-kicker">Shortcuts</p>
+        <h2>Browse the main views</h2>
+        <p class="nav-note">Jump between the cache overview, the newest uploads, and the heaviest stored paths.</p>
+        <div class="nav">
+          {nav_links}
+        </div>
+      </section>
+      <section class="nav-panel">
+        <p class="nav-kicker">Themes</p>
+        <h2>Change the dashboard palette</h2>
+        <p class="nav-note">Switch color themes without losing your current page or filters.</p>
+        <div class="nav">
+          {theme_links}
+        </div>
+      </section>
     </div>
     """
 
