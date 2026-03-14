@@ -12,6 +12,136 @@ from urllib.parse import parse_qs, quote, urlparse
 DB_PATH = os.environ.get("ATTIC_DB_PATH", "/var/lib/atticd/server.db")
 HOST = os.environ.get("ATTIC_OBSERVATORY_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ATTIC_OBSERVATORY_PORT", "8088"))
+DEFAULT_THEME = os.environ.get("ATTIC_OBSERVATORY_THEME", "sugarplum").strip().lower()
+
+THEMES = {
+    "sugarplum": {
+        "name": "Sugarplum",
+        "mode": "dark",
+        "bg": "#111147",
+        "bg_secondary": "#1c1a63",
+        "panel": "#1a175f",
+        "panel_alt": "#201d6a",
+        "ink": "#f9f3f9",
+        "muted": "#d0beee",
+        "accent": "#53b397",
+        "accent_2": "#db7ddd",
+        "line": "#5ca8dc",
+        "code_bg": "#15124f",
+        "code_line": "#7a57b2",
+        "shadow": "0 18px 40px rgba(1, 0, 27, 0.42)",
+        "gradient_a": "rgba(250, 93, 253, 0.25)",
+        "gradient_b": "rgba(83, 179, 151, 0.18)",
+        "danger": "#ff7aa2",
+    },
+    "catppuccin-latte": {
+        "name": "Catppuccin Latte",
+        "mode": "light",
+        "bg": "#eff1f5",
+        "bg_secondary": "#e6e9ef",
+        "panel": "#ffffff",
+        "panel_alt": "#f5f7fb",
+        "ink": "#4c4f69",
+        "muted": "#7c7f93",
+        "accent": "#1e66f5",
+        "accent_2": "#ea76cb",
+        "line": "#bcc0cc",
+        "code_bg": "#eff1f5",
+        "code_line": "#ccd0da",
+        "shadow": "0 10px 26px rgba(76, 79, 105, 0.10)",
+        "gradient_a": "rgba(30, 102, 245, 0.12)",
+        "gradient_b": "rgba(234, 118, 203, 0.10)",
+        "danger": "#d20f39",
+    },
+    "gruvbox-light": {
+        "name": "Gruvbox Light",
+        "mode": "light",
+        "bg": "#fbf1c7",
+        "bg_secondary": "#f2e5bc",
+        "panel": "#fff8d8",
+        "panel_alt": "#f8edc9",
+        "ink": "#3c3836",
+        "muted": "#7c6f64",
+        "accent": "#98971a",
+        "accent_2": "#d79921",
+        "line": "#d5c4a1",
+        "code_bg": "#f2e5bc",
+        "code_line": "#d5c4a1",
+        "shadow": "0 10px 26px rgba(60, 56, 54, 0.10)",
+        "gradient_a": "rgba(152, 151, 26, 0.12)",
+        "gradient_b": "rgba(215, 153, 33, 0.10)",
+        "danger": "#cc241d",
+    },
+    "nord": {
+        "name": "Nord",
+        "mode": "dark",
+        "bg": "#2e3440",
+        "bg_secondary": "#3b4252",
+        "panel": "#3b4252",
+        "panel_alt": "#434c5e",
+        "ink": "#eceff4",
+        "muted": "#d8dee9",
+        "accent": "#88c0d0",
+        "accent_2": "#b48ead",
+        "line": "#4c566a",
+        "code_bg": "#2b303b",
+        "code_line": "#4c566a",
+        "shadow": "0 18px 40px rgba(15, 17, 21, 0.28)",
+        "gradient_a": "rgba(136, 192, 208, 0.16)",
+        "gradient_b": "rgba(180, 142, 173, 0.14)",
+        "danger": "#bf616a",
+    },
+    "x-dark": {
+        "name": "X Dark",
+        "mode": "dark",
+        "bg": "#000000",
+        "bg_secondary": "#0f0f10",
+        "panel": "#16181c",
+        "panel_alt": "#111317",
+        "ink": "#e7e9ea",
+        "muted": "#71767b",
+        "accent": "#1d9bf0",
+        "accent_2": "#8b98a5",
+        "line": "#2f3336",
+        "code_bg": "#0f1114",
+        "code_line": "#2f3336",
+        "shadow": "0 18px 40px rgba(0, 0, 0, 0.45)",
+        "gradient_a": "rgba(29, 155, 240, 0.10)",
+        "gradient_b": "rgba(139, 152, 165, 0.08)",
+        "danger": "#f4212e",
+    },
+    "solarized-light": {
+        "name": "Solarized Light",
+        "mode": "light",
+        "bg": "#fdf6e3",
+        "bg_secondary": "#eee8d5",
+        "panel": "#fffdf4",
+        "panel_alt": "#f7f0de",
+        "ink": "#073642",
+        "muted": "#657b83",
+        "accent": "#2aa198",
+        "accent_2": "#b58900",
+        "line": "#93a1a1",
+        "code_bg": "#eee8d5",
+        "code_line": "#93a1a1",
+        "shadow": "0 10px 26px rgba(7, 54, 66, 0.10)",
+        "gradient_a": "rgba(42, 161, 152, 0.14)",
+        "gradient_b": "rgba(181, 137, 0, 0.10)",
+        "danger": "#dc322f",
+    },
+}
+
+
+def get_theme(theme_name: str | None) -> tuple[str, dict]:
+    key = (theme_name or DEFAULT_THEME or "sugarplum").strip().lower()
+    if key not in THEMES:
+        key = "sugarplum"
+    return key, THEMES[key]
+
+
+def with_theme(path: str, theme_key: str) -> str:
+    separator = "&" if "?" in path else "?"
+    return f"{path}{separator}theme={quote(theme_key)}"
 
 
 def connect_db() -> sqlite3.Connection:
@@ -50,162 +180,170 @@ def format_bytes(value) -> str:
     return f"{size:.1f} {units[unit]}"
 
 
-def page_template(title: str, body: str) -> bytes:
+def page_template(title: str, body: str, theme_key: str) -> bytes:
+    _, theme = get_theme(theme_key)
     css = """
-    :root {
-      color-scheme: light;
-      --bg: #f3efe6;
-      --panel: #fffdf8;
-      --ink: #1e1d19;
-      --muted: #6f6a5f;
-      --accent: #0b6e4f;
-      --accent-2: #d97b29;
-      --line: #ddd3bf;
-      --danger: #8f1d1d;
-      --shadow: 0 10px 30px rgba(37, 27, 7, 0.08);
-    }
-    * { box-sizing: border-box; }
-    body {
+    :root {{
+      color-scheme: {mode};
+      --bg: {bg};
+      --bg-secondary: {bg_secondary};
+      --panel: {panel};
+      --panel-alt: {panel_alt};
+      --ink: {ink};
+      --muted: {muted};
+      --accent: {accent};
+      --accent-2: {accent_2};
+      --line: {line};
+      --danger: {danger};
+      --code-bg: {code_bg};
+      --code-line: {code_line};
+      --shadow: {shadow};
+      --gradient-a: {gradient_a};
+      --gradient-b: {gradient_b};
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
       margin: 0;
       font-family: "Iosevka Aile", "IBM Plex Sans", sans-serif;
       background:
-        radial-gradient(circle at top right, rgba(217, 123, 41, 0.14), transparent 28%),
-        linear-gradient(180deg, #f8f3ea 0%, var(--bg) 100%);
+        radial-gradient(circle at top right, var(--gradient-a), transparent 28%),
+        radial-gradient(circle at bottom left, var(--gradient-b), transparent 32%),
+        linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg) 100%);
       color: var(--ink);
-    }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .shell {
+    }}
+    a {{ color: var(--accent); text-decoration: none; }}
+    a:hover {{ text-decoration: underline; }}
+    .shell {{
       max-width: 1280px;
       margin: 0 auto;
       padding: 28px;
-    }
-    .hero {
+    }}
+    .hero {{
       display: flex;
       justify-content: space-between;
       gap: 16px;
       align-items: end;
       margin-bottom: 24px;
-    }
-    .hero h1 {
+    }}
+    .hero h1 {{
       margin: 0;
       font-size: 2.2rem;
       line-height: 1;
       letter-spacing: -0.04em;
-    }
-    .hero p {
+    }}
+    .hero p {{
       margin: 8px 0 0;
       color: var(--muted);
       max-width: 60ch;
-    }
-    .badge {
+    }}
+    .badge {{
       border: 1px solid var(--line);
-      background: rgba(255,255,255,0.65);
+      background: color-mix(in srgb, var(--panel) 85%, transparent);
       border-radius: 999px;
       padding: 10px 14px;
       box-shadow: var(--shadow);
       font-size: 0.95rem;
       color: var(--muted);
-    }
-    .nav {
+    }}
+    .nav {{
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
       margin-bottom: 24px;
-    }
-    .nav a {
+    }}
+    .nav a {{
       padding: 10px 14px;
       border-radius: 999px;
       border: 1px solid var(--line);
       background: var(--panel);
       box-shadow: var(--shadow);
-    }
-    .cards {
+    }}
+    .cards {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 14px;
       margin-bottom: 24px;
-    }
-    .card, .panel {
+    }}
+    .card, .panel {{
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 18px;
       box-shadow: var(--shadow);
-    }
-    .card {
+    }}
+    .card {{
       padding: 18px;
-    }
-    .card .label {
+    }}
+    .card .label {{
       color: var(--muted);
       font-size: 0.92rem;
       margin-bottom: 6px;
-    }
-    .card .value {
+    }}
+    .card .value {{
       font-size: 1.8rem;
       font-weight: 700;
       letter-spacing: -0.04em;
-    }
-    .layout {
+    }}
+    .layout {{
       display: grid;
       grid-template-columns: 1.4fr 1fr;
       gap: 16px;
-    }
-    .panel {
+    }}
+    .panel {{
       padding: 18px;
       overflow: hidden;
-    }
-    .panel h2 {
+    }}
+    .panel h2 {{
       margin: 0 0 14px;
       font-size: 1.1rem;
-    }
-    table {
+    }}
+    table {{
       width: 100%;
       border-collapse: collapse;
       font-size: 0.94rem;
-    }
-    th, td {
+    }}
+    th, td {{
       text-align: left;
       padding: 10px 8px;
       border-top: 1px solid var(--line);
       vertical-align: top;
-    }
-    th {
+    }}
+    th {{
       color: var(--muted);
       font-weight: 600;
       border-top: 0;
       padding-top: 0;
-    }
-    code {
+    }}
+    code {{
       font-family: "Iosevka Term", "IBM Plex Mono", monospace;
       font-size: 0.92em;
-      background: #f6f0e2;
-      border: 1px solid #eadcbc;
+      background: var(--code-bg);
+      border: 1px solid var(--code-line);
       border-radius: 8px;
       padding: 2px 6px;
       word-break: break-all;
-    }
-    .mono { font-family: "Iosevka Term", "IBM Plex Mono", monospace; }
-    .spark {
+    }}
+    .mono {{ font-family: "Iosevka Term", "IBM Plex Mono", monospace; }}
+    .spark {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
       gap: 8px;
       align-items: end;
       min-height: 180px;
       padding-top: 8px;
-    }
-    .bar-wrap {
+    }}
+    .bar-wrap {{
       display: flex;
       flex-direction: column;
       justify-content: end;
       gap: 6px;
       min-height: 100%;
-    }
-    .bar {
+    }}
+    .bar {{
       background: linear-gradient(180deg, var(--accent-2), var(--accent));
       border-radius: 10px 10px 4px 4px;
       min-height: 4px;
-    }
-    .axis {
+    }}
+    .axis {{
       font-size: 0.78rem;
       color: var(--muted);
       writing-mode: vertical-rl;
@@ -213,41 +351,41 @@ def page_template(title: str, body: str) -> bytes:
       white-space: nowrap;
       height: 80px;
       overflow: hidden;
-    }
-    .muted { color: var(--muted); }
-    .empty {
+    }}
+    .muted {{ color: var(--muted); }}
+    .empty {{
       padding: 14px;
       border: 1px dashed var(--line);
       border-radius: 12px;
       color: var(--muted);
-      background: #fcfaf4;
-    }
-    .detail-grid {
+      background: var(--panel-alt);
+    }}
+    .detail-grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 12px;
-    }
-    .kv {
+    }}
+    .kv {{
       padding: 12px;
       border: 1px solid var(--line);
       border-radius: 14px;
-      background: #fcfaf4;
-    }
-    .kv .k {
+      background: var(--panel-alt);
+    }}
+    .kv .k {{
       color: var(--muted);
       font-size: 0.82rem;
       margin-bottom: 4px;
-    }
-    .footer {
+    }}
+    .footer {{
       margin-top: 24px;
       color: var(--muted);
       font-size: 0.9rem;
-    }
-    @media (max-width: 920px) {
-      .layout { grid-template-columns: 1fr; }
-      .hero { flex-direction: column; align-items: start; }
-    }
-    """
+    }}
+    @media (max-width: 920px) {{
+      .layout {{ grid-template-columns: 1fr; }}
+      .hero {{ flex-direction: column; align-items: start; }}
+    }}
+    """.format(**theme)
     markup = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -266,12 +404,23 @@ def page_template(title: str, body: str) -> bytes:
     return markup.encode("utf-8")
 
 
-def render_nav() -> str:
-    return """
+def render_nav(theme_key: str) -> str:
+    links = [
+        ("Overview", "/"),
+        ("Recent Uploads", "/uploads"),
+        ("Largest Objects", "/largest"),
+    ]
+    nav_links = "".join(f'<a href="{html.escape(with_theme(path, theme_key))}">{html.escape(label)}</a>' for label, path in links)
+    theme_links = "".join(
+        f'<a href="{html.escape(with_theme("/", key))}">{html.escape(data["name"])}</a>'
+        for key, data in THEMES.items()
+    )
+    return f"""
     <div class="nav">
-      <a href="/">Overview</a>
-      <a href="/uploads">Recent Uploads</a>
-      <a href="/largest">Largest Objects</a>
+      {nav_links}
+    </div>
+    <div class="nav">
+      {theme_links}
     </div>
     """
 
@@ -286,7 +435,7 @@ def parse_json_array(value: str | None) -> list[str]:
         return [value]
 
 
-def render_overview() -> bytes:
+def render_overview(theme_key: str) -> bytes:
     stats = query_one(
         """
         select
@@ -349,7 +498,7 @@ def render_overview() -> bytes:
     recent_rows = "".join(
         f"""
         <tr>
-          <td><a class="mono" href="/object/{quote(row['store_path_hash'])}">{html.escape(row['store_path_hash'])}</a></td>
+          <td><a class="mono" href="{html.escape(with_theme('/object/' + quote(row['store_path_hash']), theme_key))}">{html.escape(row['store_path_hash'])}</a></td>
           <td>{html.escape(row['store_path'].split('/')[-1])}</td>
           <td>{format_bytes(row['nar_size'])}</td>
           <td>{html.escape(row['created_at'])}</td>
@@ -361,7 +510,7 @@ def render_overview() -> bytes:
     largest_rows = "".join(
         f"""
         <tr>
-          <td><a href="/object/{quote(row['store_path_hash'])}" class="mono">{html.escape(row['store_path_hash'])}</a></td>
+          <td><a href="{html.escape(with_theme('/object/' + quote(row['store_path_hash']), theme_key))}" class="mono">{html.escape(row['store_path_hash'])}</a></td>
           <td>{html.escape(row['store_path'].split('/')[-1])}</td>
           <td>{format_bytes(row['nar_size'])}</td>
           <td>{html.escape(row['created_at'])}</td>
@@ -379,7 +528,7 @@ def render_overview() -> bytes:
       </div>
       <div class="badge">DB: <code>{html.escape(DB_PATH)}</code></div>
     </div>
-    {render_nav()}
+    {render_nav(theme_key)}
     <div class="cards">
       <div class="card"><div class="label">Cache</div><div class="value">{html.escape(cache_name)}</div></div>
       <div class="card"><div class="label">Objects</div><div class="value">{format_int(stats['objects'])}</div></div>
@@ -428,10 +577,10 @@ def render_overview() -> bytes:
     </div>
     <div class="footer">Source schema: <code>cache</code>, <code>object</code>, <code>nar</code>, <code>chunk</code>, <code>chunkref</code>.</div>
     """
-    return page_template("attic-observatory", body)
+    return page_template("attic-observatory", body, theme_key)
 
 
-def render_uploads(query: dict[str, list[str]]) -> bytes:
+def render_uploads(query: dict[str, list[str]], theme_key: str) -> bytes:
     limit = min(max(int(query.get("limit", ["100"])[0]), 1), 500)
     rows = query_all(
         """
@@ -457,7 +606,7 @@ def render_uploads(query: dict[str, list[str]]) -> bytes:
     body_rows = "".join(
         f"""
         <tr>
-          <td><a class="mono" href="/object/{quote(row['store_path_hash'])}">{html.escape(row['store_path_hash'])}</a></td>
+          <td><a class="mono" href="{html.escape(with_theme('/object/' + quote(row['store_path_hash']), theme_key))}">{html.escape(row['store_path_hash'])}</a></td>
           <td>{html.escape(row['store_path'])}</td>
           <td>{format_bytes(row['nar_size'])}</td>
           <td>{format_int(row['num_chunks'])}</td>
@@ -476,7 +625,7 @@ def render_uploads(query: dict[str, list[str]]) -> bytes:
       </div>
       <div class="badge">Showing {format_int(limit)} rows</div>
     </div>
-    {render_nav()}
+    {render_nav(theme_key)}
     <div class="panel">
       <table>
         <thead>
@@ -486,10 +635,10 @@ def render_uploads(query: dict[str, list[str]]) -> bytes:
       </table>
     </div>
     """
-    return page_template("Recent Uploads", body)
+    return page_template("Recent Uploads", body, theme_key)
 
 
-def render_largest() -> bytes:
+def render_largest(theme_key: str) -> bytes:
     rows = query_all(
         """
         select
@@ -508,7 +657,7 @@ def render_largest() -> bytes:
     body_rows = "".join(
         f"""
         <tr>
-          <td><a class="mono" href="/object/{quote(row['store_path_hash'])}">{html.escape(row['store_path_hash'])}</a></td>
+          <td><a class="mono" href="{html.escape(with_theme('/object/' + quote(row['store_path_hash']), theme_key))}">{html.escape(row['store_path_hash'])}</a></td>
           <td>{html.escape(row['store_path'])}</td>
           <td>{format_bytes(row['nar_size'])}</td>
           <td>{format_int(row['num_chunks'])}</td>
@@ -525,7 +674,7 @@ def render_largest() -> bytes:
         <p>Top 100 store paths by NAR size.</p>
       </div>
     </div>
-    {render_nav()}
+    {render_nav(theme_key)}
     <div class="panel">
       <table>
         <thead>
@@ -535,10 +684,10 @@ def render_largest() -> bytes:
       </table>
     </div>
     """
-    return page_template("Largest Objects", body)
+    return page_template("Largest Objects", body, theme_key)
 
 
-def render_object_detail(store_hash: str) -> bytes:
+def render_object_detail(store_hash: str, theme_key: str) -> bytes:
     row = query_one(
         """
         select
@@ -560,8 +709,9 @@ def render_object_detail(store_hash: str) -> bytes:
             "Object Not Found",
             f"""
             <div class="hero"><div><h1>Object Not Found</h1><p>No object matched <code>{html.escape(store_hash)}</code>.</p></div></div>
-            {render_nav()}
+            {render_nav(theme_key)}
             """,
+            theme_key,
         )
     refs = parse_json_array(row["references"])
     sigs = parse_json_array(row["sigs"])
@@ -596,9 +746,9 @@ def render_object_detail(store_hash: str) -> bytes:
         <h1>Object Detail</h1>
         <p class="mono">{html.escape(row['store_path'])}</p>
       </div>
-      <div class="badge"><a href="/uploads">Back to uploads</a></div>
+      <div class="badge"><a href="{html.escape(with_theme('/uploads', theme_key))}">Back to uploads</a></div>
     </div>
-    {render_nav()}
+    {render_nav(theme_key)}
     <div class="panel">
       <div class="detail-grid">
         <div class="kv"><div class="k">Store Path Hash</div><div><code>{html.escape(row['store_path_hash'])}</code></div></div>
@@ -633,7 +783,7 @@ def render_object_detail(store_hash: str) -> bytes:
       </table>
     </div>
     """
-    return page_template(f"Object {store_hash}", body)
+    return page_template(f"Object {store_hash}", body, theme_key)
 
 
 class AppHandler(BaseHTTPRequestHandler):
@@ -641,19 +791,20 @@ class AppHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         route = parsed.path
         query = parse_qs(parsed.query)
+        theme_key, _theme = get_theme(query.get("theme", [None])[0])
         try:
             if route == "/":
-                self.respond(200, render_overview())
+                self.respond(200, render_overview(theme_key))
             elif route == "/uploads":
-                self.respond(200, render_uploads(query))
+                self.respond(200, render_uploads(query, theme_key))
             elif route == "/largest":
-                self.respond(200, render_largest())
+                self.respond(200, render_largest(theme_key))
             elif route.startswith("/object/"):
-                self.respond(200, render_object_detail(route.split("/", 2)[2]))
+                self.respond(200, render_object_detail(route.split("/", 2)[2], theme_key))
             else:
-                self.respond(404, page_template("Not Found", f"<div class='hero'><div><h1>Not Found</h1><p>{html.escape(route)}</p></div></div>{render_nav()}"))
+                self.respond(404, page_template("Not Found", f"<div class='hero'><div><h1>Not Found</h1><p>{html.escape(route)}</p></div></div>{render_nav(theme_key)}", theme_key))
         except sqlite3.Error as exc:
-            self.respond(500, page_template("Database Error", f"<div class='hero'><div><h1>Database Error</h1><p><code>{html.escape(str(exc))}</code></p></div></div>"))
+            self.respond(500, page_template("Database Error", f"<div class='hero'><div><h1>Database Error</h1><p><code>{html.escape(str(exc))}</code></p></div></div>{render_nav(theme_key)}", theme_key))
 
     def respond(self, status: int, body: bytes) -> None:
         self.send_response(status)
