@@ -139,6 +139,10 @@ if DEFAULT_THEME not in THEMES:
     warnings.warn(f"Unknown theme '{DEFAULT_THEME}', falling back to 'x-dark'", stacklevel=1)
 
 
+class QueryValidationError(Exception):
+    pass
+
+
 def get_theme(theme_name: str | None) -> tuple[str, dict]:
     key = (theme_name or DEFAULT_THEME or "x-dark").strip().lower()
     if key not in THEMES:
@@ -655,6 +659,22 @@ def parse_json_array(value: str | None) -> list[str]:
     except json.JSONDecodeError:
         return [value]
 
+def parse_bounded_int_arg(
+    query: dict[str, list[str]],
+    key: str,
+    *,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int:
+    values = query.get(key)
+    raw = values[0] if values else str(default)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise QueryValidationError(f"Query parameter '{key}' must be an integer.") from exc
+    return min(max(value, minimum), maximum)
+
 
 def extract_store_path_hash(store_path: str | None) -> str | None:
     if not store_path:
@@ -861,7 +881,7 @@ def render_overview(theme_key: str, current_path: str) -> bytes:
 
 
 def render_uploads(query: dict[str, list[str]], theme_key: str, current_path: str) -> bytes:
-    limit = min(max(int(query.get("limit", ["100"])[0]), 1), 500)
+    limit = parse_bounded_int_arg(query, "limit", default=100, minimum=1, maximum=500)
     rows = query_all(
         """
         select
@@ -1153,6 +1173,8 @@ class AppHandler(BaseHTTPRequestHandler):
                 self.respond(200, render_object_detail(route.split("/", 2)[2], theme_key, current_path))
             else:
                 self.respond(404, page_template("Not Found", f"<div class='hero'><div><h1>Not Found</h1><p>{html.escape(route)}</p></div></div>{render_nav(theme_key, current_path)}", theme_key))
+        except QueryValidationError as exc:
+            self.respond(400, page_template("Bad Request", f"<div class='hero'><div><h1>Bad Request</h1><p><code>{html.escape(str(exc))}</code></p></div></div>{render_nav(theme_key, current_path)}", theme_key))
         except sqlite3.Error as exc:
             self.respond(500, page_template("Database Error", f"<div class='hero'><div><h1>Database Error</h1><p><code>{html.escape(str(exc))}</code></p></div></div>{render_nav(theme_key, current_path)}", theme_key))
 
