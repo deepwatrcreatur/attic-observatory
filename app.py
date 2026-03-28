@@ -3,6 +3,7 @@
 import html
 import json
 import os
+import re
 import sqlite3
 import sys
 import warnings
@@ -15,6 +16,7 @@ HOST = os.environ.get("ATTIC_OBSERVATORY_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ATTIC_OBSERVATORY_PORT", "8088"))
 DB_IMMUTABLE = os.environ.get("ATTIC_DB_IMMUTABLE", "").strip().lower() in {"1", "true", "yes", "on"}
 DEFAULT_THEME = os.environ.get("ATTIC_OBSERVATORY_THEME", "x-dark").strip().lower()
+STORE_PATH_HASH_RE = re.compile(r"^[0-9a-df-np-sv-z]{32}$")
 
 THEMES = {
     "sugarplum": {
@@ -509,6 +511,27 @@ def parse_json_array(value: str | None) -> list[str]:
         return [value]
 
 
+def extract_store_path_hash(store_path: str | None) -> str | None:
+    if not store_path:
+        return None
+    prefix = "/nix/store/"
+    if not store_path.startswith(prefix):
+        return None
+    tail = store_path[len(prefix) :]
+    store_hash, separator, _name = tail.partition("-")
+    if not separator or not store_hash or not STORE_PATH_HASH_RE.fullmatch(store_hash):
+        return None
+    return store_hash
+
+
+def render_reference_item(reference: str, theme_key: str) -> str:
+    store_hash = extract_store_path_hash(reference)
+    if store_hash is None:
+        return f"<li><code>{html.escape(reference)}</code></li>"
+    href = html.escape(with_theme("/object/" + quote(store_hash), theme_key))
+    return f'<li><a href="{href}"><code>{html.escape(reference)}</code></a></li>'
+
+
 def render_overview(theme_key: str, current_path: str) -> bytes:
     stats = query_one(
         """
@@ -800,7 +823,7 @@ def render_object_detail(store_hash: str, theme_key: str, current_path: str) -> 
         """,
         (row["nar_id"],),
     )
-    ref_list = "".join(f"<li><code>{html.escape(ref)}</code></li>" for ref in refs) or "<li class='muted'>None</li>"
+    ref_list = "".join(render_reference_item(ref, theme_key) for ref in refs) or "<li class='muted'>None</li>"
     sig_list = "".join(f"<li><code>{html.escape(sig)}</code></li>" for sig in sigs) or "<li class='muted'>None</li>"
     chunk_rows = "".join(
         f"""
