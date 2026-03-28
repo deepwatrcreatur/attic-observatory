@@ -137,6 +137,10 @@ if DEFAULT_THEME not in THEMES:
     warnings.warn(f"Unknown theme '{DEFAULT_THEME}', falling back to 'x-dark'", stacklevel=1)
 
 
+class QueryValidationError(Exception):
+    pass
+
+
 def get_theme(theme_name: str | None) -> tuple[str, dict]:
     key = (theme_name or DEFAULT_THEME or "x-dark").strip().lower()
     if key not in THEMES:
@@ -517,11 +521,12 @@ def parse_bounded_int_arg(
     minimum: int,
     maximum: int,
 ) -> int:
-    raw = query.get(key, [str(default)])[0]
+    values = query.get(key)
+    raw = values[0] if values else str(default)
     try:
         value = int(raw)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"Query parameter '{key}' must be an integer.") from exc
+        raise QueryValidationError(f"Query parameter '{key}' must be an integer.") from exc
     return min(max(value, minimum), maximum)
 
 
@@ -894,7 +899,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 self.respond(200, render_object_detail(route.split("/", 2)[2], theme_key, current_path))
             else:
                 self.respond(404, page_template("Not Found", f"<div class='hero'><div><h1>Not Found</h1><p>{html.escape(route)}</p></div></div>{render_nav(theme_key, current_path)}", theme_key))
-        except ValueError as exc:
+        except QueryValidationError as exc:
             self.respond(400, page_template("Bad Request", f"<div class='hero'><div><h1>Bad Request</h1><p><code>{html.escape(str(exc))}</code></p></div></div>{render_nav(theme_key, current_path)}", theme_key))
         except sqlite3.Error as exc:
             self.respond(500, page_template("Database Error", f"<div class='hero'><div><h1>Database Error</h1><p><code>{html.escape(str(exc))}</code></p></div></div>{render_nav(theme_key, current_path)}", theme_key))
