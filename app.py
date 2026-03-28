@@ -3,6 +3,7 @@
 import html
 import json
 import os
+import re
 import sqlite3
 import sys
 import warnings
@@ -15,6 +16,7 @@ HOST = os.environ.get("ATTIC_OBSERVATORY_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ATTIC_OBSERVATORY_PORT", "8088"))
 DB_IMMUTABLE = os.environ.get("ATTIC_DB_IMMUTABLE", "").strip().lower() in {"1", "true", "yes", "on"}
 DEFAULT_THEME = os.environ.get("ATTIC_OBSERVATORY_THEME", "x-dark").strip().lower()
+STORE_PATH_HASH_RE = re.compile(r"^[0-9a-df-np-sv-z]{32}$")
 
 THEMES = {
     "sugarplum": {
@@ -215,80 +217,153 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
       --shadow: {shadow};
       --gradient-a: {gradient_a};
       --gradient-b: {gradient_b};
+      --panel-glow: color-mix(in srgb, var(--accent) 12%, transparent);
+      --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--panel));
+      --accent-strong: color-mix(in srgb, var(--accent) 72%, white 8%);
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
       font-family: "Iosevka Aile", "IBM Plex Sans", sans-serif;
       background:
-        radial-gradient(circle at top right, var(--gradient-a), transparent 28%),
-        radial-gradient(circle at bottom left, var(--gradient-b), transparent 32%),
+        linear-gradient(color-mix(in srgb, var(--bg) 90%, transparent), color-mix(in srgb, var(--bg-secondary) 94%, transparent)),
+        radial-gradient(circle at top right, var(--gradient-a), transparent 24%),
+        radial-gradient(circle at bottom left, var(--gradient-b), transparent 28%),
+        repeating-linear-gradient(0deg, transparent, transparent 71px, color-mix(in srgb, var(--line) 35%, transparent) 71px, color-mix(in srgb, var(--line) 35%, transparent) 72px),
+        repeating-linear-gradient(90deg, transparent, transparent 71px, color-mix(in srgb, var(--line) 35%, transparent) 71px, color-mix(in srgb, var(--line) 35%, transparent) 72px),
         linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg) 100%);
       color: var(--ink);
+      min-height: 100vh;
     }}
     a {{ color: var(--accent); text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
     .shell {{
-      max-width: 1280px;
+      max-width: 1440px;
       margin: 0 auto;
-      padding: 28px;
+      padding: 28px 24px 40px;
     }}
     .hero {{
       display: flex;
       justify-content: space-between;
-      gap: 16px;
-      align-items: end;
+      gap: 18px;
+      align-items: stretch;
       margin-bottom: 24px;
+    }}
+    .hero-main, .hero-aside {{
+      background: color-mix(in srgb, var(--panel) 88%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }}
+    .hero-main {{
+      flex: 1 1 auto;
+      padding: 26px;
+      min-width: 0;
+    }}
+    .hero-aside {{
+      flex: 0 0 320px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 14px;
+    }}
+    .eyebrow {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      color: var(--accent-strong);
+      font-size: 0.82rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
     }}
     .hero h1 {{
       margin: 0;
-      font-size: 2.2rem;
-      line-height: 1;
+      font-size: clamp(2.2rem, 5vw, 3.4rem);
+      line-height: 0.96;
       letter-spacing: -0.04em;
     }}
     .hero p {{
-      margin: 8px 0 0;
+      margin: 12px 0 0;
       color: var(--muted);
-      max-width: 60ch;
+      max-width: 64ch;
+      font-size: 1rem;
+      line-height: 1.55;
+    }}
+    .hero-meta {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
     }}
     .badge {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       border: 1px solid var(--line);
-      background: color-mix(in srgb, var(--panel) 85%, transparent);
+      background: color-mix(in srgb, var(--panel-alt) 88%, transparent);
       border-radius: 999px;
       padding: 10px 14px;
-      box-shadow: var(--shadow);
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       color: var(--muted);
+    }}
+    .hero-stats {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    .hero-stat {{
+      background: var(--panel-alt);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+    }}
+    .hero-stat .label {{
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 6px;
+    }}
+    .hero-stat .value {{
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      word-break: break-word;
     }}
     .nav-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      grid-template-columns: 1.25fr 1fr;
       gap: 16px;
       margin-bottom: 24px;
     }}
     .nav-panel {{
-      padding: 18px;
-      background: var(--panel);
+      padding: 20px;
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
       border: 1px solid var(--line);
-      border-radius: 18px;
+      border-radius: 22px;
       box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
     }}
     .nav-kicker {{
-      margin: 0 0 6px;
+      margin: 0 0 8px;
       font-size: 0.78rem;
       letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: var(--accent);
+      color: var(--accent-strong);
     }}
     .nav-panel h2 {{
-      margin: 0 0 6px;
-      font-size: 1.05rem;
+      margin: 0 0 8px;
+      font-size: 1.12rem;
     }}
     .nav-note {{
-      margin: 0 0 14px;
+      margin: 0 0 16px;
       color: var(--muted);
-      font-size: 0.94rem;
+      font-size: 0.95rem;
       max-width: 48ch;
+      line-height: 1.5;
     }}
     .nav {{
       display: flex;
@@ -299,44 +374,59 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
       padding: 10px 14px;
       border-radius: 999px;
       border: 1px solid var(--line);
-      background: var(--panel);
-      box-shadow: var(--shadow);
-      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+      background: color-mix(in srgb, var(--panel-alt) 86%, transparent);
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
     }}
     .nav a:hover {{
       text-decoration: none;
       transform: translateY(-1px);
       border-color: var(--accent);
+      box-shadow: 0 10px 22px var(--panel-glow);
     }}
     .nav a.is-active {{
-      background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+      background: var(--accent-soft);
       border-color: var(--accent);
       color: var(--ink);
     }}
     .cards {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 16px;
       margin-bottom: 24px;
     }}
     .card, .panel {{
-      background: var(--panel);
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
       border: 1px solid var(--line);
-      border-radius: 18px;
+      border-radius: 22px;
       box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
     }}
     .card {{
-      padding: 18px;
+      padding: 18px 18px 20px;
+      position: relative;
+      overflow: hidden;
+    }}
+    .card::before {{
+      content: "";
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      opacity: 0.92;
     }}
     .card .label {{
       color: var(--muted);
-      font-size: 0.92rem;
-      margin-bottom: 6px;
+      font-size: 0.8rem;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
     }}
     .card .value {{
-      font-size: 1.8rem;
+      font-size: clamp(1.5rem, 3vw, 2.2rem);
       font-weight: 700;
       letter-spacing: -0.04em;
+      line-height: 1.05;
     }}
     .layout {{
       display: grid;
@@ -344,12 +434,30 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
       gap: 16px;
     }}
     .panel {{
-      padding: 18px;
+      padding: 20px;
       overflow: hidden;
     }}
-    .panel h2 {{
-      margin: 0 0 14px;
-      font-size: 1.1rem;
+    .panel-header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: end;
+      margin-bottom: 14px;
+    }}
+    .panel-header h2 {{
+      margin: 0;
+      font-size: 1.14rem;
+    }}
+    .panel-note {{
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }}
+    .table-wrap {{
+      overflow-x: auto;
+      margin: 0 -2px;
+      padding-bottom: 2px;
     }}
     table {{
       width: 100%;
@@ -358,7 +466,7 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
     }}
     th, td {{
       text-align: left;
-      padding: 10px 8px;
+      padding: 12px 10px;
       border-top: 1px solid var(--line);
       vertical-align: top;
     }}
@@ -367,6 +475,12 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
       font-weight: 600;
       border-top: 0;
       padding-top: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.74rem;
+    }}
+    tbody tr:hover {{
+      background: color-mix(in srgb, var(--panel-alt) 82%, transparent);
     }}
     code {{
       font-family: "Iosevka Term", "IBM Plex Mono", monospace;
@@ -380,11 +494,11 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
     .mono {{ font-family: "Iosevka Term", "IBM Plex Mono", monospace; }}
     .spark {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
       gap: 8px;
       align-items: end;
       min-height: 180px;
-      padding-top: 8px;
+      padding: 16px 0 4px;
     }}
     .bar-wrap {{
       display: flex;
@@ -397,6 +511,7 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
       background: linear-gradient(180deg, var(--accent-2), var(--accent));
       border-radius: 10px 10px 4px 4px;
       min-height: 4px;
+      box-shadow: 0 10px 20px color-mix(in srgb, var(--accent) 18%, transparent);
     }}
     .axis {{
       font-size: 0.78rem;
@@ -421,24 +536,56 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
       gap: 12px;
     }}
     .kv {{
-      padding: 12px;
+      padding: 14px;
       border: 1px solid var(--line);
-      border-radius: 14px;
+      border-radius: 16px;
       background: var(--panel-alt);
     }}
     .kv .k {{
       color: var(--muted);
-      font-size: 0.82rem;
-      margin-bottom: 4px;
+      font-size: 0.78rem;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+    }}
+    ul {{
+      margin: 0;
+      padding-left: 18px;
+    }}
+    li + li {{
+      margin-top: 8px;
     }}
     .footer {{
       margin-top: 24px;
       color: var(--muted);
       font-size: 0.9rem;
     }}
+    .split-layout {{
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }}
+    .object-path {{
+      margin-top: 12px;
+      font-size: 0.96rem;
+      line-height: 1.5;
+    }}
     @media (max-width: 920px) {{
       .layout {{ grid-template-columns: 1fr; }}
-      .hero {{ flex-direction: column; align-items: start; }}
+      .split-layout {{ grid-template-columns: 1fr; }}
+      .nav-grid {{ grid-template-columns: 1fr; }}
+      .hero {{ flex-direction: column; }}
+      .hero-aside {{ flex-basis: auto; }}
+      .shell {{ padding-inline: 16px; }}
+      .panel-header {{ flex-direction: column; align-items: start; }}
+    }}
+    @media (max-width: 640px) {{
+      .hero-main, .hero-aside, .nav-panel, .card, .panel {{ border-radius: 18px; }}
+      .hero-main {{ padding: 20px; }}
+      .hero-aside, .panel, .nav-panel, .card {{ padding: 16px; }}
+      .hero-stats {{ grid-template-columns: 1fr; }}
+      th, td {{ padding-inline: 8px; }}
     }}
     """.format(**theme)
     markup = f"""<!doctype html>
@@ -494,7 +641,7 @@ def render_nav(theme_key: str, current_path: str) -> str:
       <section class="nav-panel">
         <p class="nav-kicker">Themes</p>
         <h2>Change the dashboard palette</h2>
-        <p class="nav-note">Switch color themes without losing your current page or filters.</p>
+        <p class="nav-note">Switch color themes without losing your current page or filters. The active choice stays embedded in each link.</p>
         <div class="nav">
           {theme_links}
         </div>
@@ -512,7 +659,6 @@ def parse_json_array(value: str | None) -> list[str]:
     except json.JSONDecodeError:
         return [value]
 
-
 def parse_bounded_int_arg(
     query: dict[str, list[str]],
     key: str,
@@ -528,6 +674,27 @@ def parse_bounded_int_arg(
     except (TypeError, ValueError) as exc:
         raise QueryValidationError(f"Query parameter '{key}' must be an integer.") from exc
     return min(max(value, minimum), maximum)
+
+
+def extract_store_path_hash(store_path: str | None) -> str | None:
+    if not store_path:
+        return None
+    prefix = "/nix/store/"
+    if not store_path.startswith(prefix):
+        return None
+    tail = store_path[len(prefix) :]
+    store_hash, separator, _name = tail.partition("-")
+    if not separator or not store_hash or not STORE_PATH_HASH_RE.fullmatch(store_hash):
+        return None
+    return store_hash
+
+
+def render_reference_item(reference: str, theme_key: str) -> str:
+    store_hash = extract_store_path_hash(reference)
+    if store_hash is None:
+        return f"<li><code>{html.escape(reference)}</code></li>"
+    href = html.escape(with_theme("/object/" + quote(store_hash), theme_key))
+    return f'<li><a href="{href}"><code>{html.escape(reference)}</code></a></li>'
 
 
 def render_overview(theme_key: str, current_path: str) -> bytes:
@@ -617,13 +784,28 @@ def render_overview(theme_key: str, current_path: str) -> bytes:
     cache_key = cache["keypair"].split(":")[0] if cache and cache["keypair"] else "-"
     body = f"""
     <div class="hero">
-      <div>
+      <div class="hero-main">
+        <div class="eyebrow">Attic Cache Dashboard</div>
         <h1>attic-observatory</h1>
         <p>Operational view into Attic uploads, object growth, and cache contents.</p>
+        <div class="hero-meta">
+          <div class="badge">Cache: <strong>{html.escape(cache_name)}</strong></div>
+          <div class="badge">DB: <code>{html.escape(DB_PATH)}</code></div>
+        </div>
       </div>
-      <div class="badge">DB: <code>{html.escape(DB_PATH)}</code></div>
+      <aside class="hero-aside">
+        <div>
+          <div class="eyebrow">Snapshot</div>
+          <div class="hero-stats">
+            <div class="hero-stat"><div class="label">Public Key</div><div class="value mono">{html.escape(cache_key)}</div></div>
+            <div class="hero-stat"><div class="label">Retention</div><div class="value">{format_int(cache['retention_period'] if cache else None)}</div></div>
+            <div class="hero-stat"><div class="label">Logical Size</div><div class="value">{format_bytes(stats['total_nar_bytes'])}</div></div>
+            <div class="hero-stat"><div class="label">Chunk Storage</div><div class="value">{format_bytes(stats['total_chunk_bytes'])}</div></div>
+          </div>
+        </div>
+      </aside>
     </div>
-      {render_nav(theme_key, current_path)}
+    {render_nav(theme_key, current_path)}
     <div class="cards">
       <div class="card"><div class="label">Cache</div><div class="value">{html.escape(cache_name)}</div></div>
       <div class="card"><div class="label">Objects</div><div class="value">{format_int(stats['objects'])}</div></div>
@@ -634,32 +816,55 @@ def render_overview(theme_key: str, current_path: str) -> bytes:
     </div>
     <div class="layout">
       <div class="panel">
-        <h2>Recent Uploads</h2>
+        <div class="panel-header">
+          <div>
+            <h2>Recent Uploads</h2>
+            <div class="panel-note">Newest store paths accepted by the cache, trimmed to their package names for fast scanning.</div>
+          </div>
+        </div>
+        <div class="table-wrap">
         <table>
           <thead>
             <tr><th>Hash</th><th>Store Path</th><th>Size</th><th>Created</th><th>Created By</th></tr>
           </thead>
           <tbody>{recent_rows}</tbody>
         </table>
+        </div>
       </div>
       <div class="panel">
-        <h2>24h Upload Activity</h2>
-        <div class="muted">Grouped by hour. Hover bars for counts and bytes.</div>
+        <div class="panel-header">
+          <div>
+            <h2>24h Upload Activity</h2>
+            <div class="panel-note">Grouped by hour. Hover bars for upload counts and transferred NAR bytes.</div>
+          </div>
+        </div>
         <div class="spark">{bars}</div>
       </div>
     </div>
-    <div class="layout" style="margin-top:16px;">
+    <div class="split-layout">
       <div class="panel">
-        <h2>Largest Objects</h2>
+        <div class="panel-header">
+          <div>
+            <h2>Largest Objects</h2>
+            <div class="panel-note">Biggest stored paths by NAR size, useful for identifying the heaviest cache growth drivers.</div>
+          </div>
+        </div>
+        <div class="table-wrap">
         <table>
           <thead>
             <tr><th>Hash</th><th>Store Path</th><th>Size</th><th>Created</th></tr>
           </thead>
           <tbody>{largest_rows}</tbody>
         </table>
+        </div>
       </div>
       <div class="panel">
-        <h2>Cache Settings</h2>
+        <div class="panel-header">
+          <div>
+            <h2>Cache Settings</h2>
+            <div class="panel-note">High-signal cache configuration surfaced directly from the Attic database.</div>
+          </div>
+        </div>
         <div class="detail-grid">
           <div class="kv"><div class="k">Public Key Prefix</div><div class="mono">{html.escape(cache_key)}</div></div>
           <div class="kv"><div class="k">Priority</div><div>{format_int(cache['priority'] if cache else None)}</div></div>
@@ -714,20 +919,39 @@ def render_uploads(query: dict[str, list[str]], theme_key: str, current_path: st
     )
     body = f"""
     <div class="hero">
-      <div>
+      <div class="hero-main">
+        <div class="eyebrow">Attic Queue</div>
         <h1>Recent Uploads</h1>
         <p>Newest objects accepted by the cache.</p>
+        <div class="hero-meta">
+          <div class="badge">Live ordering: newest first</div>
+          <div class="badge">Theme: {html.escape(THEMES[theme_key]["name"])}</div>
+        </div>
       </div>
-      <div class="badge">Showing {format_int(limit)} rows</div>
+      <aside class="hero-aside">
+        <div class="eyebrow">Window</div>
+        <div class="hero-stats">
+          <div class="hero-stat"><div class="label">Rows</div><div class="value">{format_int(limit)}</div></div>
+          <div class="hero-stat"><div class="label">Route</div><div class="value mono">/uploads</div></div>
+        </div>
+      </aside>
     </div>
-      {render_nav(theme_key, current_path)}
+    {render_nav(theme_key, current_path)}
     <div class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>Upload Stream</h2>
+          <div class="panel-note">Package path, compression, chunk count, and publisher identity in one responsive table.</div>
+        </div>
+      </div>
+      <div class="table-wrap">
       <table>
         <thead>
           <tr><th>Hash</th><th>Store Path</th><th>Size</th><th>Chunks</th><th>Compression</th><th>Created</th><th>Created By</th></tr>
         </thead>
         <tbody>{body_rows}</tbody>
       </table>
+      </div>
     </div>
     """
     return page_template("Recent Uploads", body, theme_key)
@@ -764,19 +988,39 @@ def render_largest(theme_key: str, current_path: str) -> bytes:
     )
     body = f"""
     <div class="hero">
-      <div>
+      <div class="hero-main">
+        <div class="eyebrow">Capacity View</div>
         <h1>Largest Objects</h1>
         <p>Top 100 store paths by NAR size.</p>
+        <div class="hero-meta">
+          <div class="badge">Ranking: descending size</div>
+          <div class="badge">Theme: {html.escape(THEMES[theme_key]["name"])}</div>
+        </div>
       </div>
+      <aside class="hero-aside">
+        <div class="eyebrow">Window</div>
+        <div class="hero-stats">
+          <div class="hero-stat"><div class="label">Rows</div><div class="value">100</div></div>
+          <div class="hero-stat"><div class="label">Route</div><div class="value mono">/largest</div></div>
+        </div>
+      </aside>
     </div>
-      {render_nav(theme_key, current_path)}
+    {render_nav(theme_key, current_path)}
     <div class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>Largest Store Paths</h2>
+          <div class="panel-note">Use this view to spot oversized outputs and expensive artifacts occupying cache space.</div>
+        </div>
+      </div>
+      <div class="table-wrap">
       <table>
         <thead>
           <tr><th>Hash</th><th>Store Path</th><th>Size</th><th>Chunks</th><th>Created</th><th>Created By</th></tr>
         </thead>
         <tbody>{body_rows}</tbody>
       </table>
+      </div>
     </div>
     """
     return page_template("Largest Objects", body, theme_key)
@@ -821,7 +1065,7 @@ def render_object_detail(store_hash: str, theme_key: str, current_path: str) -> 
         """,
         (row["nar_id"],),
     )
-    ref_list = "".join(f"<li><code>{html.escape(ref)}</code></li>" for ref in refs) or "<li class='muted'>None</li>"
+    ref_list = "".join(render_reference_item(ref, theme_key) for ref in refs) or "<li class='muted'>None</li>"
     sig_list = "".join(f"<li><code>{html.escape(sig)}</code></li>" for sig in sigs) or "<li class='muted'>None</li>"
     chunk_rows = "".join(
         f"""
@@ -837,14 +1081,27 @@ def render_object_detail(store_hash: str, theme_key: str, current_path: str) -> 
     )
     body = f"""
     <div class="hero">
-      <div>
+      <div class="hero-main">
+        <div class="eyebrow">Object Explorer</div>
         <h1>Object Detail</h1>
-        <p class="mono">{html.escape(row['store_path'])}</p>
+        <p class="object-path mono">{html.escape(row['store_path'])}</p>
       </div>
-      <div class="badge"><a href="{html.escape(with_theme('/uploads', theme_key))}">Back to uploads</a></div>
+      <aside class="hero-aside">
+        <div class="eyebrow">Navigation</div>
+        <div class="hero-meta">
+          <div class="badge"><a href="{html.escape(with_theme('/uploads', theme_key))}">Back to uploads</a></div>
+          <div class="badge"><a href="{html.escape(with_theme('/largest', theme_key))}">Largest objects</a></div>
+        </div>
+      </aside>
     </div>
     {render_nav(theme_key, current_path)}
     <div class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>Object Metadata</h2>
+          <div class="panel-note">Key identity and storage fields for the selected object and its backing NAR.</div>
+        </div>
+      </div>
       <div class="detail-grid">
         <div class="kv"><div class="k">Store Path Hash</div><div><code>{html.escape(row['store_path_hash'])}</code></div></div>
         <div class="kv"><div class="k">Created At</div><div>{html.escape(row['created_at'])}</div></div>
@@ -858,24 +1115,41 @@ def render_object_detail(store_hash: str, theme_key: str, current_path: str) -> 
         <div class="kv"><div class="k">NAR Hash</div><div><code>{html.escape(row['nar_hash'])}</code></div></div>
       </div>
     </div>
-    <div class="layout" style="margin-top:16px;">
+    <div class="split-layout">
       <div class="panel">
-        <h2>References</h2>
+        <div class="panel-header">
+          <div>
+            <h2>References</h2>
+            <div class="panel-note">Direct store-path references extracted from the object metadata. Internal references link back into the explorer.</div>
+          </div>
+        </div>
         <ul>{ref_list}</ul>
       </div>
       <div class="panel">
-        <h2>Signatures</h2>
+        <div class="panel-header">
+          <div>
+            <h2>Signatures</h2>
+            <div class="panel-note">Recorded signatures attached to this object.</div>
+          </div>
+        </div>
         <ul>{sig_list}</ul>
       </div>
     </div>
     <div class="panel" style="margin-top:16px;">
-      <h2>Chunk Map</h2>
+      <div class="panel-header">
+        <div>
+          <h2>Chunk Map</h2>
+          <div class="panel-note">The first 50 chunk references for this NAR, including remote file ids where available.</div>
+        </div>
+      </div>
+      <div class="table-wrap">
       <table>
         <thead>
           <tr><th>Seq</th><th>Chunk Hash</th><th>Chunk Size</th><th>Chunk Created</th><th>Remote File</th></tr>
         </thead>
         <tbody>{chunk_rows}</tbody>
       </table>
+      </div>
     </div>
     """
     return page_template(f"Object {store_hash}", body, theme_key)
