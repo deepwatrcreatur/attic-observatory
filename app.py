@@ -238,7 +238,7 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
     a {{ color: var(--accent); text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
     .shell {{
-      max-width: 1440px;
+      max-width: 1920px;
       margin: 0 auto;
       padding: 28px 24px 40px;
     }}
@@ -430,7 +430,7 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
     }}
     .layout {{
       display: grid;
-      grid-template-columns: 1.4fr 1fr;
+      grid-template-columns: 2fr 1fr;
       gap: 16px;
     }}
     .panel {{
@@ -469,6 +469,9 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
       padding: 12px 10px;
       border-top: 1px solid var(--line);
       vertical-align: top;
+    }}
+    .nowrap {{
+      white-space: nowrap;
     }}
     th {{
       color: var(--muted);
@@ -562,7 +565,7 @@ def page_template(title: str, body: str, theme_key: str) -> bytes:
     }}
     .split-layout {{
       display: grid;
-      grid-template-columns: 1.4fr 1fr;
+      grid-template-columns: 2fr 1fr;
       gap: 16px;
       margin-top: 16px;
     }}
@@ -762,8 +765,8 @@ def render_overview(theme_key: str, current_path: str) -> bytes:
         <tr>
           <td><a class="mono" href="{html.escape(with_theme('/object/' + quote(row['store_path_hash']), theme_key))}">{html.escape(row['store_path_hash'])}</a></td>
           <td>{html.escape(row['store_path'].split('/')[-1])}</td>
-          <td>{format_bytes(row['nar_size'])}</td>
-          <td>{html.escape(row['created_at'])}</td>
+          <td class="nowrap">{format_bytes(row['nar_size'])}</td>
+          <td class="nowrap">{html.escape(row['created_at'])}</td>
           <td>{html.escape(row['created_by'] or '-')}</td>
         </tr>
         """
@@ -774,8 +777,8 @@ def render_overview(theme_key: str, current_path: str) -> bytes:
         <tr>
           <td><a href="{html.escape(with_theme('/object/' + quote(row['store_path_hash']), theme_key))}" class="mono">{html.escape(row['store_path_hash'])}</a></td>
           <td>{html.escape(row['store_path'].split('/')[-1])}</td>
-          <td>{format_bytes(row['nar_size'])}</td>
-          <td>{html.escape(row['created_at'])}</td>
+          <td class="nowrap">{format_bytes(row['nar_size'])}</td>
+          <td class="nowrap">{html.escape(row['created_at'])}</td>
         </tr>
         """
         for row in largest
@@ -908,10 +911,10 @@ def render_uploads(query: dict[str, list[str]], theme_key: str, current_path: st
         <tr>
           <td><a class="mono" href="{html.escape(with_theme('/object/' + quote(row['store_path_hash']), theme_key))}">{html.escape(row['store_path_hash'])}</a></td>
           <td>{html.escape(row['store_path'])}</td>
-          <td>{format_bytes(row['nar_size'])}</td>
+          <td class="nowrap">{format_bytes(row['nar_size'])}</td>
           <td>{format_int(row['num_chunks'])}</td>
           <td>{html.escape(row['compression'])}</td>
-          <td>{html.escape(row['created_at'])}</td>
+          <td class="nowrap">{html.escape(row['created_at'])}</td>
           <td>{html.escape(row['created_by'] or '-')}</td>
         </tr>
         """
