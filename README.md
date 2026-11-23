@@ -2,6 +2,21 @@
 
 Lightweight web UI for inspecting an Attic binary cache.
 
+## Screenshots
+
+The overview brings cache totals, recent uploads, and the 24-hour activity
+chart together:
+
+![Attic Observatory overview](docs/screenshots/overview.png)
+
+The uploads view lists newly stored paths with size, chunk, compression, and
+creation details:
+
+![Attic Observatory recent uploads](docs/screenshots/recent-uploads.png)
+
+These captures show the live dashboard at capture time. Counts and uploads
+change as the cache receives new objects.
+
 ## Features
 
 - Overview cards for cache, object, NAR, and chunk counts
